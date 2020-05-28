@@ -17,10 +17,12 @@ spec:
       serviceAccountName: kogito-operator
       containers:
         - name: kogito-cloud-operator
-          image: quay.io/kiegroup/kogito-cloud-operator:0.11.0
+          # image: quay.io/kiegroup/kogito-cloud-operator:0.11.0
+          image: quay.io/kmok/kogito-operator
           command:
             - kogito-cloud-operator
-          imagePullPolicy: Always
+          # imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           env:
             - name: WATCH_NAMESPACE
               valueFrom:
