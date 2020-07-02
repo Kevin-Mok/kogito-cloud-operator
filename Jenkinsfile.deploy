@@ -1,5 +1,7 @@
 @Library('jenkins-pipeline-shared-libraries')_
 
+deployProperties = [:]
+
 pipeline {
     agent {
         label 'kogito-operator-slave && !master'
@@ -15,6 +17,9 @@ pipeline {
         
         string(name: 'BUILD_BRANCH_NAME', defaultValue: 'master', description: 'Which branch to build ? Set if you are not on a multibranch pipeline.')
         string(name: 'GIT_AUTHOR', defaultValue: 'kiegroup', description: 'Which Git author repository ?')
+
+        booleanParam(name: 'RELEASE', defaultValue: false, description: 'Is this build for a release?')
+        string(name: 'PROJECT_VERSION', defaultValue: '', description: 'Optional if not RELEASE. If RELEASE, cannot be empty.')
 
         booleanParam(name: 'IMAGE_USE_OPENSHIFT_REGISTRY', defaultValue: false, description: 'Set to true if image should be deployed in Openshift registry.In this case, IMAGE_REGISTRY_CREDENTIALS, IMAGE_REGISTRY and IMAGE_NAMESPACE parameters will be ignored')
         string(name: 'IMAGE_REGISTRY_CREDENTIALS', defaultValue: '', description: 'Image registry credentials to use to deploy images. Will be ignored if no IMAGE_REGISTRY is given')
@@ -50,6 +55,8 @@ pipeline {
         OPENSHIFT_REGISTRY = credentials("OPENSHIFT_REGISTRY")
         OPENSHIFT_INTERNAL_REGISTRY = "image-registry.openshift-image-registry.svc:5000"
         OPENSHIFT_CREDS_KEY = "OPENSHIFT_CREDS"
+
+        BOT_CREDENTIALS_ID="bsig-gh-bot"
     }
     
     stages {
@@ -64,7 +71,34 @@ pipeline {
                     }
 
                     checkout(githubscm.resolveRepository("kogito-cloud-operator", params.GIT_AUTHOR, params.BUILD_BRANCH_NAME, false))
+
+                    // Add some params to properties
+                    setDeployPropertyIfNeeded('git.branch', getBuildBranch())
+                    setDeployPropertyIfNeeded('project.version', getProjectVersion())
+                    setDeployPropertyIfNeeded('release', "${isRelease()}")
+                    if (isRelease()) {
+                        assert getProjectVersion() != ''
+                    }
                 }
+            }
+        }
+        stage('Prepare for PR'){
+            when {
+                expression { return params.RELEASE }
+            }
+            steps {
+                script {
+                    githubscm.forkRepo(getPRAccountCredsId())
+                    githubscm.createBranch(getProjectVersion())
+                }
+            }
+        }
+        stage('Update version') {
+            when {
+                expression { return getProjectVersion() != '' }
+            }
+            steps {
+                // TODO bump to version
             }
         }
         stage('Build Kogito Operator') {
@@ -78,10 +112,28 @@ pipeline {
         }
         stage('Build Kogito CLI') {
             steps {
-                sh """
-                    go get -u github.com/gobuffalo/packr/v2/packr2
-                    make build-cli
-                """
+                script {
+                    // Dependency needed to pack some files in CLI binary
+                    sh "go get -u github.com/gobuffalo/packr/v2/packr2"
+                    
+                    // Build the CLI
+                    makeCliCmd = "make build-cli"
+                    if (isRelease()){
+                        makeCliCmd += " true ${getProjectVersion()}"
+                    }
+                    sh makeCliCmd
+                }
+            }
+            post {
+                success {
+                    script {
+                        path = "build/_output/bin/kogito"
+                        if (isRelease()){
+                            path = "build/_output/bin/release/*"
+                        }
+                        archiveArtifacts artifacts: path, allowEmptyArchive: false
+                    }
+                }
             }
             post {
                 success {
@@ -103,7 +155,7 @@ pipeline {
         stage("Build examples' images for testing"){
             when {
                 expression {
-                    return !params.SKIP_TESTS;
+                    return shouldLaunchTests()
                 }
             }
             steps {
@@ -126,7 +178,7 @@ pipeline {
         stage('Run Full Testing') {
             when {
                 expression {
-                    return !params.SKIP_TESTS;
+                    return shouldLaunchTests()
                 }
             }
             steps {
@@ -153,6 +205,40 @@ pipeline {
                     tagImage()
                     pushImage()
                 }
+            }
+            post {
+                success {
+                    script {
+                        String imgPrefix = "kogito-cloud-operator.image"
+                        // Store image deployment information
+                        setDeployPropertyIfNeeded("${imgPrefix}.registry", getDeployImageRegistry())
+                        setDeployPropertyIfNeeded("${imgPrefix}.namespace", getDeployImageNamespace())
+                        setDeployPropertyIfNeeded("${imgPrefix}.name-suffix", getDeployImageNameSuffix())
+                        setDeployPropertyIfNeeded("${imgPrefix}.tag", getDeployImageTag())
+                    }
+                }
+            }
+        }
+        stage('Create PR'){
+            when {
+                expression { return params.RELEASE }
+            }
+            steps {
+                script {
+                    githubscm.commitChanges(env.GIT_COMMITTER_NAME, env.GIT_COMMITTER_EMAIL, getCommitMessage(), ".")
+                    githubscm.pushObject("origin", getProjectVersion(), getPRAccountCredsId())
+                    deployProperties["kogito-cloud-operator.pr.link"] = githubscm.createPR(getCommitMessage(), "master", getPRAccountCredsId())
+                }
+            }
+            }
+        }
+    }
+    post {
+        always {
+            script {
+                def propertiesStr = deployProperties.collect{ entry ->  "${entry.key}=${entry.value}" }.join("\n")
+                writeFile(text: propertiesStr, file: "deployment.properties")
+                archiveArtifacts(artifacts: "deployment.properties")
             }
         }
     }
@@ -209,6 +295,12 @@ String getTempTag(){
     return "pr-${hash}"
 }
 
+void setDeployPropertyIfNeeded(String key, def value){
+    if (value != null && value != ""){
+        deployProperties[key] = value
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////
 // Deploy image information
 ////////////////////////////////////////////////////////////////////////
@@ -239,6 +331,34 @@ String getDeployImageTag(){
     } else {
         sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
     }
+}
+
+////////////////////////////////////////////////////////////////////////
+// Utils
+////////////////////////////////////////////////////////////////////////
+
+boolean isRelease() {
+    return params.RELEASE
+}
+
+String getBuildBranch(){
+    return params.BUILD_BRANCH_NAME
+}
+
+String getProjectVersion(){
+    return params.PROJECT_VERSION
+}
+
+String getCommitMessage(){
+    return "Update project version to ${getProjectVersion()} for release"
+}
+
+String getPRAccountCredsId(){
+    return env.BOT_CREDENTIALS_ID
+}
+
+boolean shouldLaunchTests(){
+    return !params.SKIP_TESTS
 }
 
 ////////////////////////////////////////////////////////////////////////

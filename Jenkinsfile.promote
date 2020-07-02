@@ -1,6 +1,8 @@
-// Promote images
+@Library('jenkins-pipeline-shared-libraries')_
 
 IMAGES = ["kogito-cloud-operator"]
+
+def deployProperties = [:]
 
 pipeline {
     agent {
@@ -10,6 +12,13 @@ pipeline {
     parameters {
         string(name: 'DISPLAY_NAME', defaultValue: '', description: 'Setup a specific build display name')
 
+        string(name: 'DEPLOY_BUILD_URL', defaultValue: '', description: 'URL to jenkins deploy build to retrieve the `deployment.properties` file. If base parameters are defined, they will override the `deployment.properties` information')
+
+        string(name: 'BUILD_BRANCH_NAME', defaultValue: 'master', description: 'Override `deployment.properties`. Which branch to build ? Set if you are not on a multibranch pipeline.')
+        booleanParam(name: 'RELEASE', defaultValue: false, description: 'Override `deployment.properties`. Is this build for a release?')
+        string(name: 'PROJECT_VERSION', defaultValue: '', description: 'Override `deployment.properties`. Optional if not RELEASE. If RELEASE, cannot be empty.')
+        string(name: 'GIT_TAG', defaultValue: '', description: 'Git tag to set, if different from PROJECT_VERSION')
+        
         booleanParam(name: 'BASE_IMAGE_USE_OPENSHIFT_REGISTRY', defaultValue: false, description: 'Set to true if base image should be deployed in Openshift registry.In this case, BASE_IMAGE_REGISTRY_CREDENTIALS, BASE_IMAGE_REGISTRY and BASE_IMAGE_NAMESPACE parameters will be ignored')
         string(name: 'BASE_IMAGE_REGISTRY_CREDENTIALS', defaultValue: '', description: 'Base Image registry credentials to use to deploy images. Will be ignored if no BASE_IMAGE_REGISTRY is given')
         string(name: 'BASE_IMAGE_REGISTRY', defaultValue: '', description: 'Base image registry')
@@ -41,6 +50,16 @@ pipeline {
 
                     if (params.DISPLAY_NAME != "") {
                         currentBuild.displayName = params.DISPLAY_NAME
+                    }
+
+                    // TODO set env with build url and/or params
+                    readDeployProperties()
+
+                    if (isRelease()) {
+                        assert getProjectVersion() != ''
+                    }
+                    if (getGitTag() != ""){
+                        assert getBuildBranch() != ''
                     }
                 }
             }
@@ -74,6 +93,31 @@ pipeline {
                     }
                     pushImages()
                 }
+            }
+        }
+        stage('Merge PR') {
+            when {
+                expression {
+                    return isRelease()
+                }
+            }
+            steps{
+                script {
+                    // TODO retrieve pr-link
+                    githubscm.mergePR()
+                }
+            }
+        }
+        stage('Git tag') {
+            when {
+                expression {
+                    return getGitTag() != ""
+                }
+            }
+            steps {
+                // TODO Retrieve latest BUILD_BRANCH_NAME / GIT_AUTHOR ?
+                // Tag repository
+                githubscm.tagRepository()
             }
         }
     }
@@ -207,4 +251,52 @@ String getNewImageNameSuffix(){
 
 String getNewImageTag(){
     return params.PROMOTE_IMAGE_TAG
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Deployment properties
+//////////////////////////////////////////////////////////////////////////////
+
+void readDeployProperties(){
+    if (params.DEPLOY_BUILD_URL != null){
+        // TODO read and set deployProperties
+    }
+}
+
+boolean hasDeployProperty(String key){
+    return deployProperties[key] != null
+}
+
+String getDeployProperty(String key){
+    if(hasDeployProperty(key)){
+        return deployProperties[key]
+    }
+    return ""
+}
+
+String getParamOrDeployProperty(String paramKey, String deployPropertyKey){
+    if (params[paramKey] != ""){
+        return params[paramKey]
+    }
+    return getDeployProperty(deployPropertyKey)
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Getter / Setter
+//////////////////////////////////////////////////////////////////////////////
+
+boolean isRelease() {
+    return params.RELEASE || (getDeployProperty("release") == "true")
+}
+
+String getProjectVersion() {
+    return getParamOrDeployProperty("PROJECT_VERSION", "project.version")
+}
+
+String getGitTag() {
+    return params.GIT_TAG != "" ? params.GIT_TAG : getProjectVersion()
+}
+
+String getBuildBranch() {
+    return getParamOrDeployProperty("BUILD_BRANCH_NAME", "git.branch")
 }
