@@ -43,7 +43,7 @@ pipeline {
 
     options {
         buildDiscarder logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: '10')
-        timeout(time: 360, unit: 'MINUTES')
+        timeout(time: 420, unit: 'MINUTES')
     }
 
     environment {
@@ -55,10 +55,6 @@ pipeline {
         OPENSHIFT_REGISTRY = credentials("OPENSHIFT_REGISTRY")
         OPENSHIFT_INTERNAL_REGISTRY = "image-registry.openshift-image-registry.svc:5000"
         OPENSHIFT_CREDS_KEY = "OPENSHIFT_CREDS"
-
-        // Here under is a list of env variable which are defined dynamically into the pipeline
-        // We don't define them here because then there would be immutable ...
-        // TEST_PARAMS => parameters which will be set in `configure testing` stage, depending also on pipeline params
 
         BOT_CREDENTIALS_ID="bsig-gh-bot"
     }
@@ -92,7 +88,7 @@ pipeline {
             }
             steps {
                 script {
-                    githubscm.forkRepo(env.BOT_CREDENTIALS_ID)
+                    githubscm.forkRepo(getPRAccountCredsId())
                     githubscm.createBranch(getProjectVersion())
                 }
             }
@@ -159,7 +155,7 @@ pipeline {
         stage("Build examples' images for testing"){
             when {
                 expression {
-                    return !params.SKIP_TESTS;
+                    return shouldLaunchTests()
                 }
             }
             steps {
@@ -182,12 +178,12 @@ pipeline {
         stage('Run Full Testing') {
             when {
                 expression {
-                    return !params.SKIP_TESTS;
+                    return shouldLaunchTests()
                 }
             }
             steps {
                 script {
-                    sh "make run-tests load_factor=3 concurrent=3 image_cache_mode=always smoke=${params.SMOKE_TESTS_ONLY} ${getBDDParameters()}"
+                    sh "make run-tests timeout=360 load_factor=3 concurrent=6 image_cache_mode=always smoke=${params.SMOKE_TESTS_ONLY} ${getBDDParameters()}"
                 }
             }
             post {
@@ -215,12 +211,10 @@ pipeline {
                     script {
                         String imgPrefix = "kogito-cloud-operator.image"
                         // Store image deployment information
-                        setDeployPropertyIfNeeded("${imgPrefix}.registry-creds", env.DEPLOY_IMAGE_REGISTRY_CREDENTIALS)
-                        setDeployPropertyIfNeeded("${imgPrefix}.use-openshift-registry", env.DEPLOY_IMAGE_USE_OPENSHIFT)
-                        setDeployPropertyIfNeeded("${imgPrefix}.registry", env.DEPLOY_IMAGE_REGISTRY)
-                        setDeployPropertyIfNeeded("${imgPrefix}.namespace", env.DEPLOY_IMAGE_NAMESPACE)
-                        setDeployPropertyIfNeeded("${imgPrefix}.name-suffix", env.DEPLOY_IMAGE_NAME_SUFFIX)
-                        setDeployPropertyIfNeeded("${imgPrefix}.tag", env.DEPLOY_IMAGE_TAG)
+                        setDeployPropertyIfNeeded("${imgPrefix}.registry", getDeployImageRegistry())
+                        setDeployPropertyIfNeeded("${imgPrefix}.namespace", getDeployImageNamespace())
+                        setDeployPropertyIfNeeded("${imgPrefix}.name-suffix", getDeployImageNameSuffix())
+                        setDeployPropertyIfNeeded("${imgPrefix}.tag", getDeployImageTag())
                     }
                 }
             }
@@ -232,19 +226,19 @@ pipeline {
             steps {
                 script {
                     githubscm.commitChanges(env.GIT_COMMITTER_NAME, env.GIT_COMMITTER_EMAIL, getCommitMessage(), ".")
-                    githubscm.pushObject("origin", getProjectVersion(), env.BOT_CREDENTIALS_ID)
-                    deployProperties["kogito-cloud-operator.pr.link"] = githubscm.createPR(getCommitMessage(), "master", env.BOT_CREDENTIALS_ID)
+                    githubscm.pushObject("origin", getProjectVersion(), getPRAccountCredsId())
+                    deployProperties["kogito-cloud-operator.pr.link"] = githubscm.createPR(getCommitMessage(), "master", getPRAccountCredsId())
                 }
+            }
             }
         }
     }
     post {
         always {
             script {
-                def propertiesFile = "deployment.properties"
                 def propertiesStr = deployProperties.collect{ entry ->  "${entry.key}=${entry.value}" }.join("\n")
-                writeFile(text: propertiesStr, file: propertiesFile)
-                archiveArtifacts(artifacts: propertiesFile)
+                writeFile(text: propertiesStr, file: "deployment.properties")
+                archiveArtifacts(artifacts: "deployment.properties")
             }
         }
     }
@@ -353,6 +347,34 @@ String getProjectVersion(){
 
 String getCommitMessage(){
     return "Update project version to ${getProjectVersion()} for release"
+}
+
+////////////////////////////////////////////////////////////////////////
+// Utils
+////////////////////////////////////////////////////////////////////////
+
+boolean isRelease() {
+    return params.RELEASE
+}
+
+String getBuildBranch(){
+    return params.BUILD_BRANCH_NAME
+}
+
+String getProjectVersion(){
+    return params.PROJECT_VERSION
+}
+
+String getCommitMessage(){
+    return "Update project version to ${getProjectVersion()} for release"
+}
+
+String getPRAccountCredsId(){
+    return env.BOT_CREDENTIALS_ID
+}
+
+boolean shouldLaunchTests(){
+    return !params.SKIP_TESTS
 }
 
 ////////////////////////////////////////////////////////////////////////
