@@ -5,6 +5,22 @@ you will need to set up a Nexus instance locally. We chose to deploy
 it on a K8s cluster as we’ll be using that for testing the 
 operator.
 
+## Table of Contents
+* [Install Minikube](#install-minikube)
+* [Setup Nexus](#setup-nexus)
+   * [Getting Admin Password](#getting-admin-password)
+* [Setup Maven Repository](#setup-maven-repository)
+* [Build and Deploy Artifacts](#build-and-deploy-artifacts)
+* [Building the Images](#building-the-images)
+   * [Packages](#packages)
+   * [Python Modules](#python-modules)
+   * [Updating Maven Information](#updating-maven-information)
+   * [Building Images](#building-images)
+      * [Image List](#image-list)
+* [Installing the Operator](#installing-the-operator)
+
+Created by [gh-md-toc](https://github.com/ekalinin/github-markdown-toc).
+
 ## Install Minikube
 We decided to go with Minikube as the K8s cluster as it is 
 very resource efficient and can be started easily on any 
