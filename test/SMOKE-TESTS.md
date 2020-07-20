@@ -1,27 +1,28 @@
 ﻿Guide for Core/Runtimes team to Smoke test local changes on Openshift/k8s Cluster.
 
-
-Before starting to build the artifacts with your changes. You would need to set up a nexus locally, we chose to deploy it on a k8s cluster as we’ll be using that for testing the operator.
-
+Before starting to build the artifacts with your changes. 
+You would need to set up a nexus locally, we chose to deploy 
+it on a k8s cluster as we’ll be using that for testing the 
+operator.
 
 Install Minikube: 
 
-
-We decided to go with Minikube as the k8s cluster as it is very resource efficient and can be started easily on any system. 
-
+We decided to go with Minikube as the k8s cluster as it is 
+very resource efficient and can be started easily on any 
+system. 
 
 Prerequisites:  
-* Install kubectl binaries on your system [see](https://kubernetes.io/docs/tasks/tools/install-kubectl/) 
+* Install kubectl binaries on your system 
+  [see](https://kubernetes.io/docs/tasks/tools/install-kubectl/) 
 * Have a hypervisor installed (kvm  is recommended for linux)
 
-
-Finally for installing the Minikube cluster please follow [this tutorial](https://kubernetes.io/docs/tasks/tools/install-minikube/)
-
+Finally for installing the Minikube cluster please follow 
+[this 
+tutorial](https://kubernetes.io/docs/tasks/tools/install-minikube/)
 
 Setup Nexus:[a]
 We are going to use the nexus operator from 
 [m88i labs](https://github.com/m88i/nexus-operator/) to deploy the nexus.
-
 
 Follow the steps to have your nexus:
 * Clone the above repo.
@@ -35,16 +36,15 @@ NAME                         TYPE            CLUSTER-IP          EXTERNAL-IP   P
 nexus-operator-metrics   ClusterIP   10.107.88.110   <none>            8383/TCP,8686/TCP   17m
 nexus3                       NodePort        10.110.72.0         <none>            8081:31031/TCP          17m
 ```
+
 You can just run 
 `# minikube service nexus3 -n nexus`
 It’ll open the nexus server on your default browser
 
-
 Note: It can take a few minutes to have the nexus server running
 
-
-For authentication with the nexus server, you’ll need to get the admin password from the pod running the nexus server.[b]
-
+For authentication with the nexus server, you’ll need to get 
+the admin password from the pod running the nexus server.[b]
 
 Check the pod name.
 ```
@@ -53,8 +53,9 @@ NAME                                          READY       STATUS            REST
 nexus-operator-8577d97489-zr4wg   1/1                 Running         0              15m
 nexus3-66f6555ff-pkbjx                        1/1                 Running         0              14m
 ```
-The with nexus3-* is your pod with nexus server running, the initial admin password is stored at `/nexus-data/admin.password` on the server.
-
+The with nexus3-* is your pod with nexus server running, the 
+initial admin password is stored at 
+`/nexus-data/admin.password` on the server.
 
 You can get that by running the following command.
 # `kubectl exec nexus3-66f6555ff-pkbjx -n nexus -- cat /nexus-data/admin.password`
@@ -109,21 +110,24 @@ Note: The repository url will be different in your case, though you’ll be able
 mvn clean deploy -DaltDeploymentRepository=runtimes-artifacts::default::http://172.17.0.3:31031/repository/runtimes-artifacts/   -DskipTests(optional if you want to skip tests)
 ```
 
-
-* Same for the [kogito-examples](https://github.com/kiegroup/kogito-examples) artifacts can be deployed with the same command inside the cloned repository.
+* Same for the 
+  [kogito-examples](https://github.com/kiegroup/kogito-examples) 
+  artifacts can be deployed with the same command inside the 
+  cloned repository.
 ```
-mvn clean deploy -DaltDeploymentRepository=runtimes-artifacts::default::http://172.17.0.3:31031/repository/runtimes-artifacts/   -DskipTests(optional if you want to skip tests) ```
-
-
-
+mvn clean deploy 
+-DaltDeploymentRepository=runtimes-artifacts::default::http://172.17.0.3:31031/repository/runtimes-artifacts/   
+-DskipTests(optional if you want to skip tests)
+```
 
 Build the Images:[d]
-After all the artifacts are present in the maven repository, we start to build the [kogito-images](https://github.com/kiegroup/kogito-images). We use a cekit to build our images so few dependencies are needed.
-
+After all the artifacts are present in the maven repository, 
+we start to build the 
+[kogito-images](https://github.com/kiegroup/kogito-images). 
+We use a cekit to build our images so few dependencies are 
+needed.
 
 Prerequisites:
-
-
  
 Packages: 
 * docker
@@ -139,12 +143,7 @@ Packages:
 * Maven 3.6.2+
 * pip3 (Can also be installed from [here](https://pip.pypa.io/en/stable/installing/) Just keep in mind to run the script with python3)
 
-
-
-
-
-
-        Python Modules: needs to be installed by pip3. By running pip3 install <package>
+Python Modules: needs to be installed by pip3. By running pip3 install <package>
 * cekit
 * behave
 * lxml
@@ -155,42 +154,27 @@ Packages:
 * pyyaml
 * ruamel.yaml
 
-
-
-
-
-
-
-
-
-
-
-
-After downloading the packages you would need to update the maven information for the images. For that you can use the script inside the kogito-images repository.
-
+After downloading the packages you would need to update the 
+maven information for the images. For that you can use the 
+script inside the kogito-images repository.
 
 Inside your cloned repository just run:
 `python3 scripts/update-maven-information.py  --repo-url=http://172.17.0.3:31031/repository/runtimes-artifacts/`
 
-
-Note: Please keep in mind to update the repo-url with the repository that you deployed previously and stored all your artifacts on.
-
+Note: Please keep in mind to update the repo-url with the 
+repository that you deployed previously and stored all your 
+artifacts on.
 
 Now let’s build the images.
 
-
 For building all the images you can run `make ignore_test=true(if you want skip image tests)`
 
-
 If you only want to build and test individual images you would first need to run:
-
 
 # make clone-repos
 And for individual images you can follow the syntax below        
 
-
 # make <image_name> ignore_test=true(optional, set true for skipping the tests)
-
 
 Image List:
 * kogito-quarkus-ubi8
