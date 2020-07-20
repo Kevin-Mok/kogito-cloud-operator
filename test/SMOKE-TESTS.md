@@ -1,182 +1,161 @@
-﻿Guide for Core/Runtimes team to Smoke test local changes on Openshift/k8s Cluster.
+﻿# Guide for Core/Runtimes Team to Smoke Test Local Changes on OpenShift/K8s Cluster
 
-Before starting to build the artifacts with your changes. 
-You would need to set up a nexus locally, we chose to deploy 
-it on a k8s cluster as we’ll be using that for testing the 
+Before starting to build the artifacts with your changes, 
+you will need to set up a Nexus instance locally. We chose to deploy 
+it on a K8s cluster as we’ll be using that for testing the 
 operator.
 
-Install Minikube: 
-
-We decided to go with Minikube as the k8s cluster as it is 
+## Install Minikube
+We decided to go with Minikube as the K8s cluster as it is 
 very resource efficient and can be started easily on any 
 system. 
 
-Prerequisites:  
-* Install kubectl binaries on your system 
-  [see](https://kubernetes.io/docs/tasks/tools/install-kubectl/) 
-* Have a hypervisor installed (kvm  is recommended for linux)
+**Prerequisites**:  
+* [Install kubectl binaries](https://kubernetes.io/docs/tasks/tools/install-kubectl/) on your system 
+* Have a hypervisor installed (kvm is recommended for Linux)
 
-Finally for installing the Minikube cluster please follow 
-[this 
-tutorial](https://kubernetes.io/docs/tasks/tools/install-minikube/)
+For installing the Minikube cluster, please follow 
+[this tutorial](https://kubernetes.io/docs/tasks/tools/install-minikube/).
 
-Setup Nexus:[a]
-We are going to use the nexus operator from 
-[m88i labs](https://github.com/m88i/nexus-operator/) to deploy the nexus.
+## Setup Nexus
+We are going to use the Nexus operator from 
+[m88i labs](https://github.com/m88i/nexus-operator/) to deploy the Nexus.
 
-Follow the steps to have your nexus:
+Follow the steps to have your Nexus:
 * Clone the above repo.
 * Run `make install` in the cloned repo.
-* This will expose your nexus server as a nodePort service on Minikube. Which can be accessed from the Minikube’s IP
-* `# minikube ip` (Will return the IP address of your minikube cluster.)
-To find the port on which nexus server is running on the above IP run:
- ```
-kubectl get svc -n nexus
-NAME                         TYPE            CLUSTER-IP          EXTERNAL-IP   PORT(S)                 AGE
-nexus-operator-metrics   ClusterIP   10.107.88.110   <none>            8383/TCP,8686/TCP   17m
-nexus3                       NodePort        10.110.72.0         <none>            8081:31031/TCP          17m
+* This will expose your Nexus server as a `NodePort` service on Minikube. This 
+  will be accessed from the Minikube's IP (`minikube ip` will return the IP address of your Minikube cluster).
+* To find the port on which Nexus server is running on the above IP, run:
+    ```
+    $ kubectl get svc -n nexus
+    NAME                     TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)             AGE
+    nexus-operator-metrics   ClusterIP   10.103.2.155    <none>        8383/TCP,8686/TCP   30m
+    nexus3                   NodePort    10.109.238.40   <none>        8081:31031/TCP      30m
+    ```
+* You can just run `minikube service nexus3 -n nexus` to 
+  open the Nexus server on your default browser.
+  * *Note*: It can take a few minutes to have the Nexus server running.
+
+### Getting Admin Password
+For authentication with the Nexus server, you’ll need to get 
+the admin password from the pod running the Nexus server. 
+Check the pod name:
+```
+$ kubectl get pod -n nexus
+NAME                              READY   STATUS    RESTARTS   AGE
+nexus-operator-8577d97489-57w8n   1/1     Running   0          35m
+nexus3-66f6555ff-zqc59            1/1     Running   0          35m
 ```
 
-You can just run 
-`# minikube service nexus3 -n nexus`
-It’ll open the nexus server on your default browser
-
-Note: It can take a few minutes to have the nexus server running
-
-For authentication with the nexus server, you’ll need to get 
-the admin password from the pod running the nexus server.[b]
-
-Check the pod name.
-```
-kubectl get po -n nexus
-NAME                                          READY       STATUS            RESTARTS   AGE
-nexus-operator-8577d97489-zr4wg   1/1                 Running         0              15m
-nexus3-66f6555ff-pkbjx                        1/1                 Running         0              14m
-```
-The with nexus3-* is your pod with nexus server running, the 
+The `nexus3-*` is your pod with Nexus server running. The 
 initial admin password is stored at 
-`/nexus-data/admin.password` on the server.
+`/nexus-data/admin.password` on the server. 
 
-You can get that by running the following command.
-# `kubectl exec nexus3-66f6555ff-pkbjx -n nexus -- cat /nexus-data/admin.password`
- (Just remember to change the pod name from the one displayed in your setup)
+You can get that by running the following command:
+`kubectl exec nexus3-66f6555ff-zqc59 -n nexus -- cat 
+/nexus-data/admin.password` (just remember to change the pod 
+name from the one displayed in your setup).
 
+You can use this password and the username `admin` to 
+authenticate with your Nexus. It’ll ask to change it in the 
+initial setup. Make sure to allow for anonymous access to 
+the repository.
 
-You can use this password and admin username to authenticate with your nexus, it’ll ask to change it in the initial setup. Make sure to allow for anonymous access to the repository.
+## Setup Maven Repository
 
+Next we have to set up a hosted Maven repository for storing 
+the artifacts building from runtimes/apps/examples. 
 
-Next we’ve to set up a hosted maven repository for storing the artifacts building from runtimes/ apps/ examples. 
+After initial setup and allowing anonymous users access to read, 
+do the following:
+1. Go to the gear icon in the top-left corner and select `Repositories` from the left panel.
+1. Select `Create Repository` and `maven2 (hosted)` from the list.
+1. Give it a name (e.g. `runtimes-artifacts`).
+1. Make sure `Online` is checked and select `Mixed` in the `Version Policy -> What type of artifacts does this repository store?`.
+1. Select `Allow redeploy` (in case of any errors) inside `Hosted -> Deployment Policy`.
+1. You can leave everything else as default and click on `Create Repository`. The repository URL can be seen after creating the repository from its home page.
+1. Click on the gear icon again and select `Security -> Users` from the left sidebar. Select `anonymous` user, move 
+`nx-admin` from the available roles to the granted roles and 
+click save. 
+    - This is to allow anonymous users to push to this 
+repository as this repository is hosted inside Minikube in 
+your system; it won't be accessible by anyone else, so we 
+need to enable anonymous push to this Nexus server. 
 
+The repository is all ready now; we can build and deploy our artifacts in it.
 
+## Build and Deploy Artifacts
+Before proceeding, read the `README` files on the following repos to know the dependencies you might need to install to build and deploy the artifacts:
+- [kogito-runtimes](https://github.com/kiegroup/kogito-runtimes#requirements)
+- [kogito-apps](https://github.com/kiegroup/kogito-apps#building-from-source)
+- [kogito-examples](https://github.com/kiegroup/kogito-examples#process-hello-world-with-scripts)
 
-
-Setup Maven Repository:
-
-
-After Initial setup and allowing anonymous users access to read. 
-* Go to the gear icon in the left corner and select repositories from the left panel
-* Select `Create Repository` and then select `maven2 (hosted)` from the list
-* Give it a name for eg: `runtimes-artifacts`.
-* Make sure you check the repository is online and select `mixed` in the `Version Policy -> What type of artifacts does this repository store?`
-* Also allow redeploy in case of any errors, inside `Hosted -> Deployment Policy`
-* You can leave everything as default and click on `Create Repository` 
-* The repository URL can be seen after creating the repository from its home page
-* Allow anonymous users to push to this repository (as this repository is hosted inside minikube in your system it won’t be accessible by anyone else, so we can enable the anonymous push to this nexus server.)
-* For that Click on the Gear icon -> Select Users (Inside security) -> Select Anonymous User -> Grant admin role to the user and click save.
-
-
-The repository is all ready now, we can build and deploy our artifacts in it 
-
-
-
-
-Build and Deploy Artifacts:[c]
-
-
-Before proceeding read the README files on the following repos to know the dependencies you might need to install to build and deploy the artifacts
-* Let’s deploy the [kogito-runtimes](https://github.com/kiegroup/kogito-runtimes) artifacts first. 
-Inside your cloned kogito-runtimes repo run
+We will deploy the kogito-runtimes artifacts first. Copy 
+your repository URL from Nexus by clicking on the gear icon, 
+selecting `Repository -> Repositories` from the sidebar and 
+clicking the copy button in your repository's row. Then, 
+run the following commmand inside your cloned kogito-runtimes repo:
 ```
-mvn clean deploy -DaltDeploymentRepository=runtimes-artifacts::default::http://172.17.0.3:31031/repository/runtimes-artifacts/   -DskipTests(optional if you want to skip tests)
+mvn clean deploy -DaltDeploymentRepository=repository_name_here::default::repository_url_here
 ```
-The above command will build, test and deploy your artifacts on your repository.
-
-
-Note: The repository url will be different in your case, though you’ll be able to see it when you select your repository from the repositories list on the nexus server.
-
-
-* Similarly the [kogito-apps](https://github.com/kiegroup/kogito-apps) artifacts can be deployed with the same command inside the cloned repository.
+This command will build, test and deploy your artifacts on your repository. If you want to skip tests, run:
 ```
-mvn clean deploy -DaltDeploymentRepository=runtimes-artifacts::default::http://172.17.0.3:31031/repository/runtimes-artifacts/   -DskipTests(optional if you want to skip tests)
-```
-
-* Same for the 
-  [kogito-examples](https://github.com/kiegroup/kogito-examples) 
-  artifacts can be deployed with the same command inside the 
-  cloned repository.
-```
-mvn clean deploy 
--DaltDeploymentRepository=runtimes-artifacts::default::http://172.17.0.3:31031/repository/runtimes-artifacts/   
--DskipTests(optional if you want to skip tests)
+mvn clean deploy -DaltDeploymentRepository=repository_name_here::default::repository_url_here -DskipTests
 ```
 
-Build the Images:[d]
-After all the artifacts are present in the maven repository, 
+The same command can be used to deploy the apps/examples 
+artifacts inside their respective repositories.
+
+## Building the Images
+After all the artifacts are present in the Maven repository, 
 we start to build the 
 [kogito-images](https://github.com/kiegroup/kogito-images). 
-We use a cekit to build our images so few dependencies are 
+We use CEKit to build our images, so some dependencies are 
 needed.
 
-Prerequisites:
- 
-Packages: 
-* docker
-* gcc
-* krb5-devel
-* s2i
-* python3
-* GraalVM 19.3.1-java11 +
-* native-image(installed by running gu install native-image, gu is present after graal is installed and in path)
-* zlib-devel
-* glibc-devel
-* OpenJDK 11.0.6
-* Maven 3.6.2+
-* pip3 (Can also be installed from [here](https://pip.pypa.io/en/stable/installing/) Just keep in mind to run the script with python3)
+### Packages 
+* `docker`
+* `gcc`
+* `krb5-devel`
+* `s2i`
+* `python3`
+* GraalVM 19.3.1 (Java 11 or higher)
+* `native-image`
+  - installed by running `gu install native-image`
+  - `gu` is present after Graal is installed and in `PATH`
+* `zlib-devel`
+* `glibc-devel`
+* OpenJDK 11.0.6 or higher
+* Maven 3.6.2 or higher
+* `pip3` 
+  - Can be installed from [here](https://pip.pypa.io/en/stable/installing/). Just keep in mind to run the script with `python3`.
 
-Python Modules: needs to be installed by pip3. By running pip3 install <package>
-* cekit
-* behave
-* lxml
-* docker
-* docker-squash
-* odcs[client]
-* elementPath
-* pyyaml
-* ruamel.yaml
+### Python Modules
+Run: 
+```
+pip3 install cekit behave lxml docker docker-squash odcs elementpath pyyaml ruamel.yaml
+```
 
-After downloading the packages you would need to update the 
-maven information for the images. For that you can use the 
-script inside the kogito-images repository.
+### Updating Maven Information
+After downloading the packages, you will need to update the 
+Maven information for the images. You can use the 
+script inside the kogito-images repository. Inside the cloned repository, run: 
+```
+python3 scripts/update-maven-information.py --repo-url=repository_url_here
+```
 
-Inside your cloned repository just run:
-`python3 scripts/update-maven-information.py  --repo-url=http://172.17.0.3:31031/repository/runtimes-artifacts/`
+### Building Images
 
-Note: Please keep in mind to update the repo-url with the 
-repository that you deployed previously and stored all your 
-artifacts on.
+For building all the images, you can run `make ignore_test=true` (if you want 
+to skip image tests). 
 
-Now let’s build the images.
+If you only want to build and test individual images, you would first need to run `make clone-repos`.
+Then for individual images, you can follow the syntax: `make 
+<image_name> ignore_test=true` (optional, set `true` for 
+skipping the tests).
 
-For building all the images you can run `make ignore_test=true(if you want skip image tests)`
-
-If you only want to build and test individual images you would first need to run:
-
-# make clone-repos
-And for individual images you can follow the syntax below        
-
-# make <image_name> ignore_test=true(optional, set true for skipping the tests)
-
-Image List:
+#### Image List
 * kogito-quarkus-ubi8
 * kogito-quarkus-jvm-ubi8
 * kogito-quarkus-ubi8-s2i
@@ -186,60 +165,17 @@ Image List:
 * kogito-jobs-service
 * kogito-management-console
 
+## Installing the Operator
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Install the Operator:
-
-
-First we would need to enable the OLM in our Minikube cluster for that just run:
-
-
-`$ minikube addons enable olm`
-
-
-Launch the OLM console locally, 
-Just clone the [operator-lifecycle-manager](https://github.com/operator-framework/operator-lifecycle-manager) repo and from the root of the project run: `$ make run-console-local`. This will run the operatorhub console on http://localhost:9000 
-Note: Needs to have `jq[e]` installed and 9000 port available on the system.
-
-
-Create a different namespace where kogito-operator and all the dependent operator will run
-
-
-`$ kubectl create ns kogito`
-
-
-Now on your browser and visit  https://localhost:9000. Select `Operators > OperatorHub` and search for kogito. 
-Select the kogito operator by Redhat and install it with defaults only changing the namespace where it needs to be installed. You can select the `kogito` namespace which was created for this purpose.
-
-
-You can see the pods by:
-
-
-`$ kubectl get po -n kogito`
-Wait till all pods are in running state (It is installing kogito-operator and all the dependent operator for kogito)
-[a]I believe this step could be optional to improve the build time only.
-[b]Oh we added the `admin/admin123` on 0.3.0.. we need to release that soon.
-[c]Instead of building the applications, one can use our images and just use a custom Dockerfile to build on top of it. There's no need to build and deploy the runtimes entirely.
-[d]Here, a developer could use Dockerfiles with our Kogito images instead. Would improve the time taken to build an app.
-[e]Let's add the link with more info  about this package.
+1. Enable the OLM in our Minikube cluster: `minikube addons enable olm`.
+2. Clone the [operator-lifecycle-manager](https://github.com/operator-framework/operator-lifecycle-manager) repo.
+3. From the root of the project, run `make 
+run-console-local`. This will run the OperatorHub console on 
+http://localhost:9000. 
+    - You will need to have `jq` installed 
+and port 9000 available on the system.
+4. Create a different namespace where kogito-operator and all the dependent operators will run: `kubectl create ns kogito`.
+5. On your browser, visit https://localhost:9000. Select `Operators > OperatorHub` and search for "kogito". 
+Select the Kogito Operator by Red Hat. Install it with the default 
+options, only changing the namespace where it needs to be installed. You can select the `kogito` namespace which was created for this purpose.
+6. You can see the pods by running `kubectl get pod -n kogito`. Wait until all pods are in running state. It is installing kogito-operator and all the dependent operators for Kogito.
