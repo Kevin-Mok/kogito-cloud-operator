@@ -501,3 +501,15 @@ func Test_DeployCmd_CustomHttpPort(t *testing.T) {
 	assert.NotNil(t, kogitoApp)
 	assert.Equal(t, int32(9090), kogitoApp.Spec.HTTPPort)
 }
+
+func Test_DeployCmd_NativeBuildWithoutSource(t *testing.T) {
+	ns := t.Name()
+	cli := fmt.Sprintf(`deploy-service native-build --native --project %s`, ns)
+	test.SetupCliTest(cli,
+		context.CommandFactory{BuildCommands: BuildCommands},
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}},
+		&apiextensionsv1beta1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: v1alpha1.KogitoAppCRDName}})
+	lines, _, err := test.ExecuteCli()
+	assert.Error(t, err)
+	assert.Contains(t, lines, "Error: native builds currently only work with s2i. Please provide [SOURCE] argument")
+}
