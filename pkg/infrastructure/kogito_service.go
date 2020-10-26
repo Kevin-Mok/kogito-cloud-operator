@@ -85,7 +85,6 @@ func injectURLIntoKogitoApps(client *client.Client, namespace string, serviceHTT
 	return nil
 }
 
-
 // GetKogitoServiceEndpoint gets the endpoint depending on
 // if the envVarKogitoServiceURL is set (for when running
 // operator locally). Else, the internal endpoint is

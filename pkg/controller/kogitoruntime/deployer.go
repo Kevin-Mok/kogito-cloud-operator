@@ -27,12 +27,12 @@ import (
 	"github.com/kiegroup/kogito-cloud-operator/pkg/framework"
 	"github.com/kiegroup/kogito-cloud-operator/pkg/infrastructure"
 	"github.com/kiegroup/kogito-cloud-operator/pkg/infrastructure/services"
+	"io/ioutil"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"net/http"
-	"io/ioutil"
 	"regexp"
 )
 
@@ -48,8 +48,8 @@ const (
 	downwardAPIVolumeName    = "podinfo"
 	downwardAPIVolumeMount   = kogitoHome + "/" + downwardAPIVolumeName
 	downwardAPIProtoBufCMKey = "protobufcm"
-	protobufSubdir = "/persistence/protobuf/"
-	protobufListFileName = "list.json"
+	protobufSubdir           = "/persistence/protobuf/"
+	protobufListFileName     = "list.json"
 
 	envVarNamespace = "NAMESPACE"
 )
@@ -81,7 +81,7 @@ func onObjectsCreate(cli *client.Client, kogitoService v1alpha1.KogitoService) (
 	return
 }
 
-func getProtobufData(cli *client.Client, kogitoService v1alpha1.KogitoService) (map[string]string) {
+func getProtobufData(cli *client.Client, kogitoService v1alpha1.KogitoService) map[string]string {
 	available, err := services.IsDeploymentAvailable(cli, kogitoService)
 	if err != nil {
 		log.Errorf("failed to check status of %s, error message: %s", kogitoService.GetName(), err.Error())
@@ -108,7 +108,7 @@ func getProtobufData(cli *client.Client, kogitoService v1alpha1.KogitoService) (
 	protobufList := strings.Split(string(protobufListBytes), ",")
 	// remove square brackets, commas and quotes from split file names
 	r, _ := regexp.Compile("[\",\\[\\]]{1}")
-	var protobufFileBytes []byte 
+	var protobufFileBytes []byte
 	data := map[string]string{}
 	for _, s := range protobufList {
 		fileName := r.ReplaceAllString(s, "")
