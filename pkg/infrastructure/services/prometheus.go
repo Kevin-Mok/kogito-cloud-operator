@@ -64,7 +64,6 @@ func isPrometheusAvailable(client *client.Client) bool {
 }
 
 func isPrometheusAddOnAvailable(kogitoService v1alpha1.KogitoService) (bool, error) {
-	// url := infrastructure.CreateKogitoServiceURI(kogitoService)
 	url := infrastructure.GetKogitoServiceEndpoint(kogitoService)
 	url = url + getMonitoringPath(kogitoService.GetSpec().GetMonitoring())
 	if resp, err := http.Head(url); err != nil {
