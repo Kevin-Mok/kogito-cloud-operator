@@ -17,7 +17,7 @@ spec:
       serviceAccountName: kogito-operator
       containers:
         - name: kogito-cloud-operator
-          image: quay.io/kiegroup/kogito-cloud-operator:1.0.0-snapshot
+          image: quay.io/kmok/kogito-cloud-operator:3376-933bd
           command:
             - kogito-cloud-operator
           imagePullPolicy: Always
@@ -35,4 +35,4 @@ spec:
                 fieldRef:
                   fieldPath: metadata.labels['name']
             - name: DEBUG
-              value: "false"
+              value: "true"

@@ -69,7 +69,7 @@ func (m *messagingDeployer) fetchRequiredTopics(instance v1alpha1.KogitoService)
 }
 
 func (m *messagingDeployer) fetchRequiredTopicsForURL(instance v1alpha1.KogitoService, serverURL string) ([]messageTopic, error) {
-	available, err := isDeploymentAvailable(m.cli, instance)
+	available, err := IsDeploymentAvailable(m.cli, instance)
 	if err != nil {
 		return nil, err
 	}

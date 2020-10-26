@@ -17,11 +17,16 @@ package infrastructure
 import (
 	"fmt"
 	"net/url"
+	"os"
 
 	"github.com/kiegroup/kogito-cloud-operator/pkg/apis/app/v1alpha1"
 	"github.com/kiegroup/kogito-cloud-operator/pkg/client"
 	"github.com/kiegroup/kogito-cloud-operator/pkg/client/kubernetes"
 	"github.com/kiegroup/kogito-cloud-operator/pkg/framework"
+)
+
+const (
+	envVarKogitoServiceURL = "KOGITO_SERVICE_URL"
 )
 
 // getSingletonKogitoServiceRoute gets the route from a kogito service that's unique in the given namespace
@@ -78,6 +83,19 @@ func injectURLIntoKogitoApps(client *client.Client, namespace string, serviceHTT
 		}
 	}
 	return nil
+}
+
+
+// GetKogitoServiceEndpoint gets the endpoint depending on
+// if the envVarKogitoServiceURL is set (for when running
+// operator locally). Else, the internal endpoint is
+// returned.
+func GetKogitoServiceEndpoint(kogitoService v1alpha1.KogitoService) string {
+	externalURL := os.Getenv(envVarKogitoServiceURL)
+	if len(externalURL) > 0 {
+		return externalURL
+	}
+	return CreateKogitoServiceURI(kogitoService)
 }
 
 func getServiceEndpoints(client *client.Client, namespace string, serviceHTTPRouteEnv string, serviceWSRouteEnv string, serviceListRef v1alpha1.KogitoServiceList) (endpoints ServiceEndpoints, err error) {
