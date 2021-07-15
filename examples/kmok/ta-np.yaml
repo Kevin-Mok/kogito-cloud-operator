@@ -1,0 +1,22 @@
+apiVersion: app.kiegroup.org/v1beta1
+kind: KogitoRuntime
+metadata:
+  name: ta
+spec:
+  replicas: 1
+  image: quay.io/kmok/kogito-travel-agency-basic
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: ta
+  name: ta-np
+spec:
+  type: NodePort
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+  selector:
+    app: ta

@@ -1,0 +1,7 @@
+apiVersion: app.kiegroup.org/v1beta1
+kind: KogitoRuntime
+metadata:
+  name: qe
+spec:
+  replicas: 1
+  image: quay.io/kmok/process-quarkus-example
